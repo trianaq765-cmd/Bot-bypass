@@ -1,7 +1,6 @@
 const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const express = require('express');
 const https = require('https');
-const http = require('http');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const PORT = process.env.PORT || 3000;
@@ -27,12 +26,12 @@ const SERVICES = {
     linkvertise: { 
         name: 'Linkvertise', 
         emoji: '🟢', 
-        patterns: [/linkvertise/i, /link-to\.net/i, /direct-link\.net/i, /link-center\.net/i, /link-target\.net/i] 
+        patterns: [/linkvertise/i, /link-to\.net/i, /direct-link\.net/i] 
     },
     lootlink: { 
         name: 'Loot-Link', 
         emoji: '🟡', 
-        patterns: [/loot-link/i, /lootlink/i, /lootdest/i] 
+        patterns: [/loot-link/i, /lootlink/i] 
     },
     fluxus: { 
         name: 'Fluxus', 
@@ -53,48 +52,12 @@ const SERVICES = {
         name: 'Hydrogen', 
         emoji: '🔷', 
         patterns: [/hydrogen/i] 
-    },
-    codex: { 
-        name: 'Codex', 
-        emoji: '⬛', 
-        patterns: [/codex/i] 
-    },
-    workink: { 
-        name: 'Work.ink', 
-        emoji: '💼', 
-        patterns: [/work\.ink/i] 
-    },
-    rekonise: { 
-        name: 'Rekonise', 
-        emoji: '🟣', 
-        patterns: [/rekonise/i, /rektink/i] 
-    },
-    socialunlock: {
-        name: 'Social Unlock',
-        emoji: '🔓',
-        patterns: [/social-unlock/i, /socialunlock/i]
-    },
-    adfly: { 
-        name: 'AdFly', 
-        emoji: '🦋', 
-        patterns: [/adf\.ly/i, /j\.gs/i, /q\.gs/i] 
-    },
-    shorte: { 
-        name: 'Shorte.st', 
-        emoji: '🔗', 
-        patterns: [/shorte\.st/i, /sh\.st/i, /gestyy/i] 
-    },
-    gplinks: {
-        name: 'GPLinks',
-        emoji: '🟩',
-        patterns: [/gplinks/i]
     }
 };
 
 function detectService(url) {
-    const lowerUrl = url.toLowerCase();
     for (const [key, service] of Object.entries(SERVICES)) {
-        if (service.patterns.some(p => p.test(lowerUrl))) {
+        if (service.patterns.some(p => p.test(url))) {
             return { key, ...service };
         }
     }
@@ -102,225 +65,169 @@ function detectService(url) {
 }
 
 // ============================================
-// REAL BYPASS FUNCTIONS
+// PLATOBOOST REAL BYPASS
 // ============================================
 
-function fetchUrl(url, options = {}) {
+function httpsRequest(options, postData = null) {
     return new Promise((resolve, reject) => {
-        const isHttps = url.startsWith('https');
-        const lib = isHttps ? https : http;
-        
-        const req = lib.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*',
-                ...options.headers
-            },
-            timeout: 15000
-        }, (res) => {
+        const req = https.request(options, (res) => {
             let data = '';
-            
-            // Handle redirects
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                return fetchUrl(res.headers.location, options).then(resolve).catch(reject);
-            }
-            
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
-                try {
-                    resolve({ data, status: res.statusCode, headers: res.headers });
-                } catch (e) {
-                    resolve({ data, status: res.statusCode, headers: res.headers });
-                }
+                resolve({
+                    status: res.statusCode,
+                    headers: res.headers,
+                    data: data
+                });
             });
         });
         
         req.on('error', reject);
-        req.on('timeout', () => {
+        req.setTimeout(15000, () => {
             req.destroy();
-            reject(new Error('Request timeout'));
-        });
-    });
-}
-
-function postUrl(url, body, options = {}) {
-    return new Promise((resolve, reject) => {
-        const urlObj = new URL(url);
-        const isHttps = url.startsWith('https');
-        const lib = isHttps ? https : http;
-        
-        const postData = typeof body === 'string' ? body : JSON.stringify(body);
-        
-        const reqOptions = {
-            hostname: urlObj.hostname,
-            port: urlObj.port || (isHttps ? 443 : 80),
-            path: urlObj.pathname + urlObj.search,
-            method: 'POST',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(postData),
-                'Accept': 'application/json',
-                ...options.headers
-            },
-            timeout: 15000
-        };
-        
-        const req = lib.request(reqOptions, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try {
-                    resolve({ data: JSON.parse(data), status: res.statusCode });
-                } catch {
-                    resolve({ data, status: res.statusCode });
-                }
-            });
+            reject(new Error('Timeout'));
         });
         
-        req.on('error', reject);
-        req.on('timeout', () => {
-            req.destroy();
-            reject(new Error('Request timeout'));
-        });
-        
-        req.write(postData);
+        if (postData) req.write(postData);
         req.end();
     });
 }
-
-// ============================================
-// BYPASS APIS (Multiple sources for reliability)
-// ============================================
-
-const BYPASS_APIS = [
-    {
-        name: 'bypass.vip',
-        url: 'https://api.bypass.vip/bypass?url=',
-        parse: (data) => {
-            if (typeof data === 'object' && data.destination) return data.destination;
-            if (typeof data === 'object' && data.result) return data.result;
-            return null;
-        }
-    },
-    {
-        name: 'api.bypass.vip',
-        url: 'https://api.bypass.vip/bypass?url=',
-        parse: (data) => data?.destination || data?.result || null
-    },
-    {
-        name: 'bypass.pm (v1)',
-        url: 'https://bypass.pm/bypass2?url=',
-        parse: (data) => data?.destination || data?.bypassed || null
-    }
-];
-
-async function tryBypassAPIs(url) {
-    const errors = [];
-    
-    for (const api of BYPASS_APIS) {
-        try {
-            console.log(`[Bypass] Trying ${api.name}...`);
-            const response = await fetchUrl(api.url + encodeURIComponent(url));
-            
-            let data;
-            try {
-                data = JSON.parse(response.data);
-            } catch {
-                data = response.data;
-            }
-            
-            console.log(`[Bypass] ${api.name} response:`, typeof data === 'object' ? JSON.stringify(data).substring(0, 200) : data.substring(0, 200));
-            
-            const result = api.parse(data);
-            if (result && result.length > 5) {
-                return { success: true, result, api: api.name };
-            }
-        } catch (error) {
-            console.log(`[Bypass] ${api.name} failed:`, error.message);
-            errors.push(`${api.name}: ${error.message}`);
-        }
-    }
-    
-    return { success: false, errors };
-}
-
-// ============================================
-// SPECIFIC BYPASS METHODS
-// ============================================
 
 async function bypassPlatoboost(url) {
     const start = Date.now();
     
     try {
-        // Method 1: Try bypass APIs
-        const apiResult = await tryBypassAPIs(url);
-        if (apiResult.success) {
-            return {
-                success: true,
-                key: apiResult.result,
-                method: `API Bypass (${apiResult.api})`,
-                time: Date.now() - start
-            };
-        }
-        
-        // Method 2: Direct extraction from URL
+        // Extract 'd' parameter from URL
         const urlObj = new URL(url);
-        const dataParam = urlObj.searchParams.get('d');
+        let encryptedData = urlObj.searchParams.get('d');
         
-        if (dataParam) {
-            try {
-                const decoded = Buffer.from(dataParam, 'base64').toString('utf-8');
-                const jsonMatch = decoded.match(/\{.*\}/);
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    if (parsed.key || parsed.destination) {
-                        return {
-                            success: true,
-                            key: parsed.key || parsed.destination,
-                            method: 'Data Extract',
-                            time: Date.now() - start
-                        };
-                    }
-                }
-            } catch {}
+        // If no 'd' param, try to extract from path
+        if (!encryptedData) {
+            const pathMatch = url.match(/[?&]d=([^&]+)/);
+            if (pathMatch) encryptedData = pathMatch[1];
         }
         
-        return {
-            success: false,
-            error: 'Tidak dapat bypass. API tidak tersedia atau link invalid.',
-            time: Date.now() - start
-        };
-        
-    } catch (error) {
-        return {
-            success: false,
-            error: error.message,
-            time: Date.now() - start
-        };
-    }
-}
+        if (!encryptedData) {
+            // Try to get from the path itself for platorelay
+            const pathParts = urlObj.pathname.split('/');
+            if (pathParts.length > 2) {
+                encryptedData = urlObj.searchParams.get('d') || pathParts[pathParts.length - 1];
+            }
+        }
 
-async function bypassLinkvertise(url) {
-    const start = Date.now();
-    
-    try {
-        const apiResult = await tryBypassAPIs(url);
-        if (apiResult.success) {
+        if (!encryptedData) {
             return {
-                success: true,
-                key: apiResult.result,
-                method: `API Bypass (${apiResult.api})`,
+                success: false,
+                error: 'Tidak dapat menemukan parameter "d" dalam URL',
                 time: Date.now() - start
             };
         }
-        
+
+        console.log(`[Platoboost] Encrypted data: ${encryptedData.substring(0, 50)}...`);
+
+        // Step 1: Initial request to get session
+        const initOptions = {
+            hostname: 'api-gateway.platoboost.com',
+            path: `/v1/authenticators/8/${encryptedData}`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json, text/plain, */*',
+                'Origin': 'https://auth.platoboost.app',
+                'Referer': 'https://auth.platoboost.app/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'cross-site'
+            }
+        };
+
+        console.log('[Platoboost] Sending initial request...');
+        const initResponse = await httpsRequest(initOptions, '{}');
+        console.log(`[Platoboost] Initial response status: ${initResponse.status}`);
+        console.log(`[Platoboost] Initial response: ${initResponse.data.substring(0, 300)}`);
+
+        let responseData;
+        try {
+            responseData = JSON.parse(initResponse.data);
+        } catch {
+            return {
+                success: false,
+                error: 'Invalid response from Platoboost API',
+                time: Date.now() - start
+            };
+        }
+
+        // Check if we got the key directly
+        if (responseData.key) {
+            return {
+                success: true,
+                key: responseData.key,
+                method: 'Direct API',
+                time: Date.now() - start
+            };
+        }
+
+        // Check for captcha ID (means we need to solve captcha)
+        if (responseData.captcha) {
+            console.log('[Platoboost] Captcha required:', responseData.captcha);
+            
+            // Try to get key using alternative method
+            const altResult = await tryAlternativeBypass(encryptedData);
+            if (altResult.success) {
+                return altResult;
+            }
+            
+            return {
+                success: false,
+                error: 'Captcha diperlukan - tidak dapat bypass otomatis',
+                captcha: true,
+                time: Date.now() - start
+            };
+        }
+
+        // If there's a redirect or next step
+        if (responseData.redirect || responseData.url) {
+            const redirectUrl = responseData.redirect || responseData.url;
+            console.log('[Platoboost] Redirect to:', redirectUrl);
+            
+            // Follow redirect
+            const redirectResult = await followRedirect(redirectUrl);
+            if (redirectResult.success) {
+                return {
+                    success: true,
+                    key: redirectResult.key,
+                    method: 'Redirect Follow',
+                    time: Date.now() - start
+                };
+            }
+        }
+
+        // Try loot endpoint
+        if (responseData.lpiL) {
+            const lootResult = await getLootKey(encryptedData, responseData.lpiL);
+            if (lootResult.success) {
+                return {
+                    success: true,
+                    key: lootResult.key,
+                    method: 'Loot Endpoint',
+                    time: Date.now() - start
+                };
+            }
+        }
+
         return {
             success: false,
-            error: 'Bypass API tidak tersedia',
+            error: 'Tidak dapat memperoleh key - mungkin perlu verifikasi manual',
+            response: responseData,
             time: Date.now() - start
         };
+
     } catch (error) {
+        console.error('[Platoboost] Error:', error);
         return {
             success: false,
             error: error.message,
@@ -329,68 +236,172 @@ async function bypassLinkvertise(url) {
     }
 }
 
+async function tryAlternativeBypass(encryptedData) {
+    try {
+        // Try different authenticator IDs
+        const authenticatorIds = [8, 1, 2, 3, 4, 5, 6, 7, 9, 10];
+        
+        for (const authId of authenticatorIds) {
+            const options = {
+                hostname: 'api-gateway.platoboost.com',
+                path: `/v1/authenticators/${authId}/${encryptedData}`,
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Origin': 'https://auth.platoboost.app',
+                    'Referer': 'https://auth.platoboost.app/',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            };
+            
+            const response = await httpsRequest(options);
+            if (response.status === 200) {
+                try {
+                    const data = JSON.parse(response.data);
+                    if (data.key) {
+                        return { success: true, key: data.key };
+                    }
+                } catch {}
+            }
+        }
+        
+        return { success: false };
+    } catch {
+        return { success: false };
+    }
+}
+
+async function getLootKey(encryptedData, lpiL) {
+    try {
+        const options = {
+            hostname: 'api-gateway.platoboost.com',
+            path: `/v1/authenticators/8/${encryptedData}/loot`,
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Origin': 'https://auth.platoboost.app',
+                'Referer': 'https://auth.platoboost.app/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        };
+        
+        const response = await httpsRequest(options, JSON.stringify({ lpiL }));
+        const data = JSON.parse(response.data);
+        
+        if (data.key) {
+            return { success: true, key: data.key };
+        }
+        
+        return { success: false };
+    } catch {
+        return { success: false };
+    }
+}
+
+async function followRedirect(url) {
+    try {
+        const urlObj = new URL(url);
+        const options = {
+            hostname: urlObj.hostname,
+            path: urlObj.pathname + urlObj.search,
+            method: 'GET',
+            headers: {
+                'Accept': 'text/html,application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        };
+        
+        const response = await httpsRequest(options);
+        
+        // Try to extract key from response
+        const keyMatch = response.data.match(/FREE_[a-f0-9]{32}/i) || 
+                        response.data.match(/"key"\s*:\s*"([^"]+)"/);
+        
+        if (keyMatch) {
+            return { success: true, key: keyMatch[1] || keyMatch[0] };
+        }
+        
+        return { success: false };
+    } catch {
+        return { success: false };
+    }
+}
+
+// Generic bypass for other services
 async function bypassGeneric(url, service) {
     const start = Date.now();
     
-    try {
-        const apiResult = await tryBypassAPIs(url);
-        if (apiResult.success) {
-            return {
-                success: true,
-                key: apiResult.result,
-                method: `API Bypass (${apiResult.api})`,
-                time: Date.now() - start
+    // Try public bypass APIs
+    const apis = [
+        `https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`,
+        `https://bypass.pm/bypass2?url=${encodeURIComponent(url)}`
+    ];
+    
+    for (const apiUrl of apis) {
+        try {
+            const urlObj = new URL(apiUrl);
+            const options = {
+                hostname: urlObj.hostname,
+                path: urlObj.pathname + urlObj.search,
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0'
+                }
             };
-        }
-        
-        return {
-            success: false,
-            error: 'Tidak dapat bypass link ini',
-            time: Date.now() - start
-        };
-    } catch (error) {
-        return {
-            success: false,
-            error: error.message,
-            time: Date.now() - start
-        };
+            
+            const response = await httpsRequest(options);
+            const data = JSON.parse(response.data);
+            
+            if (data.destination || data.result || data.bypassed) {
+                return {
+                    success: true,
+                    key: data.destination || data.result || data.bypassed,
+                    method: 'API Bypass',
+                    time: Date.now() - start
+                };
+            }
+        } catch {}
     }
+    
+    return {
+        success: false,
+        error: 'Tidak dapat bypass link ini',
+        time: Date.now() - start
+    };
 }
 
 // Main bypass router
 async function bypass(url, service) {
-    console.log(`[Bypass] Starting bypass for ${service.name}: ${url.substring(0, 50)}...`);
+    console.log(`\n[Bypass] Service: ${service.name}`);
+    console.log(`[Bypass] URL: ${url.substring(0, 80)}...`);
     
-    switch (service.key) {
-        case 'platoboost':
-            return await bypassPlatoboost(url);
-        case 'linkvertise':
-            return await bypassLinkvertise(url);
-        default:
-            return await bypassGeneric(url, service);
+    if (service.key === 'platoboost') {
+        return await bypassPlatoboost(url);
     }
+    return await bypassGeneric(url, service);
 }
 
 // Slash commands
 const commands = [
     { 
         name: 'bypass', 
-        description: 'Bypass any supported link (REAL)', 
+        description: 'Bypass Platoboost & other links', 
         options: [{ name: 'url', type: 3, description: 'URL to bypass', required: true }] 
     },
-    { name: 'services', description: 'List all supported services' },
-    { name: 'stats', description: 'View bot statistics' },
-    { name: 'ping', description: 'Check bot latency' }
+    { name: 'services', description: 'List supported services' },
+    { name: 'stats', description: 'Bot statistics' },
+    { name: 'ping', description: 'Check latency' }
 ];
 
 // Ready
 client.once('ready', async () => {
-    console.log(`\n✅ ${client.user.tag} is online!`);
-    console.log(`📊 Servers: ${client.guilds.cache.size}`);
+    console.log(`\n✅ ${client.user.tag} online!`);
     console.log(`🔓 Services: ${Object.keys(SERVICES).length}`);
-    console.log(`⚡ Mode: REAL BYPASS\n`);
+    console.log(`⚡ Mode: Real Platoboost Bypass\n`);
 
-    client.user.setActivity(`/bypass | Real Bypass`, { type: 3 });
+    client.user.setActivity('/bypass | Real Bypass', { type: 3 });
 
     const rest = new REST({ version: '10' }).setToken(TOKEN);
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
@@ -402,71 +413,54 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     
     stats.users.add(interaction.user.id);
-    const { commandName } = interaction;
 
     try {
-        if (commandName === 'ping') {
+        if (interaction.commandName === 'ping') {
             const sent = await interaction.reply({ content: '🏓 Pinging...', fetchReply: true });
-            await interaction.editReply(`🏓 **Pong!** \`${sent.createdTimestamp - interaction.createdTimestamp}ms\` | API: \`${client.ws.ping}ms\``);
+            await interaction.editReply(`🏓 **${sent.createdTimestamp - interaction.createdTimestamp}ms** | API: **${client.ws.ping}ms**`);
         }
 
-        else if (commandName === 'services') {
+        else if (interaction.commandName === 'services') {
             const list = Object.values(SERVICES).map(s => `${s.emoji} **${s.name}**`).join('\n');
             const embed = new EmbedBuilder()
                 .setColor('#00ff00')
-                .setTitle('🔓 Supported Services (Real Bypass)')
+                .setTitle('🔓 Supported Services')
                 .setDescription(list)
-                .addFields({ name: '⚡ Mode', value: '```Real Bypass - Mendapatkan key/link asli```' })
-                .setFooter({ text: `${Object.keys(SERVICES).length} services` })
-                .setTimestamp();
+                .setFooter({ text: 'Real Bypass Mode' });
             await interaction.reply({ embeds: [embed] });
         }
 
-        else if (commandName === 'stats') {
-            const uptime = Math.floor((Date.now() - stats.start) / 1000);
-            const h = Math.floor(uptime / 3600);
-            const m = Math.floor((uptime % 3600) / 60);
-            const rate = stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(1) : 0;
+        else if (interaction.commandName === 'stats') {
+            const uptime = Math.floor((Date.now() - stats.start) / 1000 / 60);
+            const rate = stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(0) : 0;
             
             const embed = new EmbedBuilder()
                 .setColor('#00ff00')
-                .setTitle('📊 Statistics')
-                .addFields(
-                    { name: 'Total', value: `\`${stats.total}\``, inline: true },
-                    { name: 'Success', value: `\`${stats.success}\``, inline: true },
-                    { name: 'Failed', value: `\`${stats.failed}\``, inline: true },
-                    { name: 'Rate', value: `\`${rate}%\``, inline: true },
-                    { name: 'Users', value: `\`${stats.users.size}\``, inline: true },
-                    { name: 'Uptime', value: `\`${h}h ${m}m\``, inline: true }
-                )
-                .setTimestamp();
+                .setTitle('📊 Stats')
+                .setDescription(`Total: **${stats.total}** | Success: **${stats.success}** (${rate}%)\nUsers: **${stats.users.size}** | Uptime: **${uptime}m**`);
             await interaction.reply({ embeds: [embed] });
         }
 
-        else if (commandName === 'bypass') {
+        else if (interaction.commandName === 'bypass') {
             const url = interaction.options.getString('url');
             const service = detectService(url);
 
             if (!service) {
                 return interaction.reply({ 
-                    content: `❌ **URL tidak didukung!**\nGunakan \`/services\` untuk melihat list.`, 
+                    content: '❌ **URL tidak didukung!**', 
                     ephemeral: true 
                 });
             }
 
             await interaction.deferReply();
 
-            // Loading
             const loadingEmbed = new EmbedBuilder()
                 .setColor('#ffaa00')
                 .setTitle(`${service.emoji} Bypassing ${service.name}...`)
-                .setDescription('```⏳ Menghubungi bypass server...\n\n[████████░░░░░░░░░░░░] 40%```')
-                .setFooter({ text: 'Real Bypass - Mohon tunggu...' })
-                .setTimestamp();
+                .setDescription('```Connecting to Platoboost API...```');
             
             await interaction.editReply({ embeds: [loadingEmbed] });
 
-            // Process real bypass
             stats.total++;
             const result = await bypass(url, service);
 
@@ -475,31 +469,17 @@ client.on('interactionCreate', async interaction => {
 
                 const embed = new EmbedBuilder()
                     .setColor('#00ff00')
-                    .setTitle(`✅ ${service.emoji} ${service.name} - Bypassed!`)
+                    .setTitle(`✅ ${service.emoji} ${service.name} - Success!`)
                     .addFields(
-                        { name: '🔑 Result', value: `\`\`\`${result.key}\`\`\``, inline: false },
+                        { name: '🔑 Key', value: `\`\`\`${result.key}\`\`\``, inline: false },
                         { name: '⚡ Method', value: `\`${result.method}\``, inline: true },
                         { name: '⏱️ Time', value: `\`${result.time}ms\``, inline: true }
                     )
-                    .setFooter({ text: `Real Bypass | ${interaction.user.tag}` })
+                    .setFooter({ text: `${interaction.user.tag}` })
                     .setTimestamp();
 
-                // If result is a URL, add visit button
-                const isUrl = result.key.startsWith('http');
-                
-                const row = new ActionRowBuilder();
-                
-                if (isUrl) {
-                    row.addComponents(
-                        new ButtonBuilder()
-                            .setLabel('🔗 Open Link')
-                            .setStyle(ButtonStyle.Link)
-                            .setURL(result.key)
-                    );
-                }
-                
-                row.addComponents(
-                    new ButtonBuilder().setCustomId('copy').setLabel('📋 Copy').setStyle(ButtonStyle.Secondary)
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('copy').setLabel('📋 Copy').setStyle(ButtonStyle.Success)
                 );
 
                 await interaction.editReply({ embeds: [embed], components: [row] });
@@ -509,15 +489,13 @@ client.on('interactionCreate', async interaction => {
                 
                 const embed = new EmbedBuilder()
                     .setColor('#ff0000')
-                    .setTitle(`❌ ${service.emoji} Bypass Failed`)
-                    .addFields(
-                        { name: '❗ Error', value: `\`\`\`${result.error}\`\`\``, inline: false },
-                        { name: '⏱️ Time', value: `\`${result.time}ms\``, inline: true }
-                    )
+                    .setTitle(`❌ Bypass Failed`)
+                    .setDescription(`\`\`\`${result.error}\`\`\``)
                     .addFields({
-                        name: '💡 Kemungkinan Penyebab',
-                        value: '• Link sudah expired\n• Service sedang down\n• Link memerlukan verifikasi manual\n• Rate limit dari API',
-                        inline: false
+                        name: '💡 Kemungkinan',
+                        value: result.captcha 
+                            ? '• Link memerlukan CAPTCHA\n• Gunakan userscript di browser'
+                            : '• Link expired\n• Perlu verifikasi manual\n• Coba lagi nanti'
                     })
                     .setTimestamp();
 
@@ -526,32 +504,20 @@ client.on('interactionCreate', async interaction => {
         }
     } catch (error) {
         console.error('Error:', error);
-        const reply = { content: `❌ Error: ${error.message}`, ephemeral: true };
-        if (interaction.replied || interaction.deferred) {
-            interaction.followUp(reply);
-        } else {
-            interaction.reply(reply);
-        }
+        const reply = { content: `❌ ${error.message}`, ephemeral: true };
+        interaction.replied || interaction.deferred ? interaction.followUp(reply) : interaction.reply(reply);
     }
 });
 
-// Button handler
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isButton()) return;
-    if (interaction.customId === 'copy') {
-        await interaction.reply({ content: '📋 Copy hasil dari kotak di atas!', ephemeral: true });
+client.on('interactionCreate', async i => {
+    if (i.isButton() && i.customId === 'copy') {
+        await i.reply({ content: '📋 Copy key dari kotak!', ephemeral: true });
     }
 });
 
-// Express
 const app = express();
-app.get('/', (_, res) => res.json({ 
-    status: 'online', 
-    mode: 'real_bypass',
-    bot: client.user?.tag,
-    stats: { total: stats.total, success: stats.success }
-}));
-app.get('/health', (_, res) => res.send('OK'));
-app.listen(PORT, () => console.log(`🌐 Port ${PORT}`));
+app.get('/', (_, r) => r.json({ status: 'online', mode: 'real_bypass' }));
+app.get('/health', (_, r) => r.send('OK'));
+app.listen(PORT);
 
 client.login(TOKEN);
