@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const express = require('express');
-const crypto = require('crypto'); // ✅ Tambahkan ini
+const https = require('https');
+const http = require('http');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const PORT = process.env.PORT || 3000;
@@ -21,25 +22,12 @@ const SERVICES = {
     platoboost: { 
         name: 'Platoboost', 
         emoji: '🔵', 
-        patterns: [
-            /platoboost/i, 
-            /platorelay/i,
-            /plato\.gg/i,
-            /auth\.plato/i,
-            /gateway\.plato/i
-        ] 
+        patterns: [/platoboost/i, /platorelay/i, /plato\.gg/i, /gateway\.plato/i] 
     },
     linkvertise: { 
         name: 'Linkvertise', 
         emoji: '🟢', 
-        patterns: [
-            /linkvertise\.com/i, 
-            /link-to\.net/i, 
-            /direct-link\.net/i,
-            /link-center\.net/i,
-            /link-target\.net/i,
-            /up-to-down\.net/i
-        ] 
+        patterns: [/linkvertise/i, /link-to\.net/i, /direct-link\.net/i, /link-center\.net/i, /link-target\.net/i] 
     },
     lootlink: { 
         name: 'Loot-Link', 
@@ -71,25 +59,20 @@ const SERVICES = {
         emoji: '⬛', 
         patterns: [/codex/i] 
     },
-    vegax: { 
-        name: 'Vega X', 
-        emoji: '🟤', 
-        patterns: [/vegax/i] 
-    },
-    rekonise: { 
-        name: 'Rekonise', 
-        emoji: '🟣', 
-        patterns: [/rekonise/i] 
-    },
     workink: { 
         name: 'Work.ink', 
         emoji: '💼', 
         patterns: [/work\.ink/i] 
     },
-    mediafire: { 
-        name: 'MediaFire', 
-        emoji: '📁', 
-        patterns: [/mediafire/i] 
+    rekonise: { 
+        name: 'Rekonise', 
+        emoji: '🟣', 
+        patterns: [/rekonise/i, /rektink/i] 
+    },
+    socialunlock: {
+        name: 'Social Unlock',
+        emoji: '🔓',
+        patterns: [/social-unlock/i, /socialunlock/i]
     },
     adfly: { 
         name: 'AdFly', 
@@ -99,26 +82,15 @@ const SERVICES = {
     shorte: { 
         name: 'Shorte.st', 
         emoji: '🔗', 
-        patterns: [/shorte\.st/i, /sh\.st/i] 
+        patterns: [/shorte\.st/i, /sh\.st/i, /gestyy/i] 
     },
-    sub2unlock: { 
-        name: 'Sub2Unlock', 
-        emoji: '📺', 
-        patterns: [/sub2unlock/i] 
-    },
-    trigonevo: {
-        name: 'Trigon Evo',
-        emoji: '🔺',
-        patterns: [/trigon/i]
-    },
-    relzhub: {
-        name: 'Relz Hub',
-        emoji: '💜',
-        patterns: [/relz/i]
+    gplinks: {
+        name: 'GPLinks',
+        emoji: '🟩',
+        patterns: [/gplinks/i]
     }
 };
 
-// Detect service from URL
 function detectService(url) {
     const lowerUrl = url.toLowerCase();
     for (const [key, service] of Object.entries(SERVICES)) {
@@ -129,162 +101,303 @@ function detectService(url) {
     return null;
 }
 
-// ✅ FIXED: Generate proper key format
-function generateKey(serviceKey, url) {
-    // Different formats for different services
-    const formats = {
-        platoboost: () => {
-            // Format: FREE_<32 char md5 hash>
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `FREE_${hash}`;
-        },
-        fluxus: () => {
-            // Format: fluxus_<random>
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `fluxus_${hash.substring(0, 24)}`;
-        },
-        delta: () => {
-            // Format: delta_<random>
-            const hash = crypto.createHash('sha256').update(url + Date.now()).digest('hex');
-            return `delta_${hash.substring(0, 32)}`;
-        },
-        arceusx: () => {
-            // Format: arceus_<random>
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `arceus_${hash}`;
-        },
-        hydrogen: () => {
-            // Format: hydrogen_<random>
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `hydrogen_${hash.substring(0, 24)}`;
-        },
-        codex: () => {
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `codex_${hash}`;
-        },
-        vegax: () => {
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `vega_${hash.substring(0, 28)}`;
-        },
-        trigonevo: () => {
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `trigon_${hash}`;
-        },
-        relzhub: () => {
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `relz_${hash.substring(0, 24)}`;
-        },
-        linkvertise: () => {
-            // Linkvertise returns destination URL
-            return `https://direct-link.net/${crypto.randomBytes(8).toString('hex')}`;
-        },
-        lootlink: () => {
-            return `https://loot-link.com/go/${crypto.randomBytes(6).toString('hex')}`;
-        },
-        default: () => {
-            const hash = crypto.createHash('md5').update(url + Date.now()).digest('hex');
-            return `KEY_${hash}`;
-        }
-    };
+// ============================================
+// REAL BYPASS FUNCTIONS
+// ============================================
 
-    const generator = formats[serviceKey] || formats.default;
-    return generator();
+function fetchUrl(url, options = {}) {
+    return new Promise((resolve, reject) => {
+        const isHttps = url.startsWith('https');
+        const lib = isHttps ? https : http;
+        
+        const req = lib.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                ...options.headers
+            },
+            timeout: 15000
+        }, (res) => {
+            let data = '';
+            
+            // Handle redirects
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                return fetchUrl(res.headers.location, options).then(resolve).catch(reject);
+            }
+            
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    resolve({ data, status: res.statusCode, headers: res.headers });
+                } catch (e) {
+                    resolve({ data, status: res.statusCode, headers: res.headers });
+                }
+            });
+        });
+        
+        req.on('error', reject);
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Request timeout'));
+        });
+    });
 }
 
-// Extract data from Platoboost URL
-function extractPlatoData(url) {
+function postUrl(url, body, options = {}) {
+    return new Promise((resolve, reject) => {
+        const urlObj = new URL(url);
+        const isHttps = url.startsWith('https');
+        const lib = isHttps ? https : http;
+        
+        const postData = typeof body === 'string' ? body : JSON.stringify(body);
+        
+        const reqOptions = {
+            hostname: urlObj.hostname,
+            port: urlObj.port || (isHttps ? 443 : 80),
+            path: urlObj.pathname + urlObj.search,
+            method: 'POST',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData),
+                'Accept': 'application/json',
+                ...options.headers
+            },
+            timeout: 15000
+        };
+        
+        const req = lib.request(reqOptions, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    resolve({ data: JSON.parse(data), status: res.statusCode });
+                } catch {
+                    resolve({ data, status: res.statusCode });
+                }
+            });
+        });
+        
+        req.on('error', reject);
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Request timeout'));
+        });
+        
+        req.write(postData);
+        req.end();
+    });
+}
+
+// ============================================
+// BYPASS APIS (Multiple sources for reliability)
+// ============================================
+
+const BYPASS_APIS = [
+    {
+        name: 'bypass.vip',
+        url: 'https://api.bypass.vip/bypass?url=',
+        parse: (data) => {
+            if (typeof data === 'object' && data.destination) return data.destination;
+            if (typeof data === 'object' && data.result) return data.result;
+            return null;
+        }
+    },
+    {
+        name: 'api.bypass.vip',
+        url: 'https://api.bypass.vip/bypass?url=',
+        parse: (data) => data?.destination || data?.result || null
+    },
+    {
+        name: 'bypass.pm (v1)',
+        url: 'https://bypass.pm/bypass2?url=',
+        parse: (data) => data?.destination || data?.bypassed || null
+    }
+];
+
+async function tryBypassAPIs(url) {
+    const errors = [];
+    
+    for (const api of BYPASS_APIS) {
+        try {
+            console.log(`[Bypass] Trying ${api.name}...`);
+            const response = await fetchUrl(api.url + encodeURIComponent(url));
+            
+            let data;
+            try {
+                data = JSON.parse(response.data);
+            } catch {
+                data = response.data;
+            }
+            
+            console.log(`[Bypass] ${api.name} response:`, typeof data === 'object' ? JSON.stringify(data).substring(0, 200) : data.substring(0, 200));
+            
+            const result = api.parse(data);
+            if (result && result.length > 5) {
+                return { success: true, result, api: api.name };
+            }
+        } catch (error) {
+            console.log(`[Bypass] ${api.name} failed:`, error.message);
+            errors.push(`${api.name}: ${error.message}`);
+        }
+    }
+    
+    return { success: false, errors };
+}
+
+// ============================================
+// SPECIFIC BYPASS METHODS
+// ============================================
+
+async function bypassPlatoboost(url) {
+    const start = Date.now();
+    
     try {
+        // Method 1: Try bypass APIs
+        const apiResult = await tryBypassAPIs(url);
+        if (apiResult.success) {
+            return {
+                success: true,
+                key: apiResult.result,
+                method: `API Bypass (${apiResult.api})`,
+                time: Date.now() - start
+            };
+        }
+        
+        // Method 2: Direct extraction from URL
         const urlObj = new URL(url);
         const dataParam = urlObj.searchParams.get('d');
-        let decoded = null;
         
         if (dataParam) {
             try {
-                decoded = Buffer.from(dataParam, 'base64').toString('utf-8');
+                const decoded = Buffer.from(dataParam, 'base64').toString('utf-8');
+                const jsonMatch = decoded.match(/\{.*\}/);
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    if (parsed.key || parsed.destination) {
+                        return {
+                            success: true,
+                            key: parsed.key || parsed.destination,
+                            method: 'Data Extract',
+                            time: Date.now() - start
+                        };
+                    }
+                }
             } catch {}
         }
         
         return {
-            data: dataParam,
-            host: urlObj.hostname,
-            path: urlObj.pathname,
-            decoded: decoded
+            success: false,
+            error: 'Tidak dapat bypass. API tidak tersedia atau link invalid.',
+            time: Date.now() - start
         };
-    } catch {
-        return null;
+        
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message,
+            time: Date.now() - start
+        };
     }
 }
 
-// ✅ FIXED: Bypass function with proper key generation
-async function bypass(url, service) {
+async function bypassLinkvertise(url) {
     const start = Date.now();
     
-    // Simulate processing time
-    await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
-    
-    const methods = {
-        platoboost: ['Checkpoint Bypass', 'Token Extract', 'Session Skip'],
-        linkvertise: ['API Bypass', 'Direct Extract', 'Ad Skip'],
-        lootlink: ['Direct Access', 'Link Extract'],
-        fluxus: ['Checkpoint Bypass', 'HWID Spoof'],
-        delta: ['License Bypass', 'Key Gen'],
-        arceusx: ['HWID Bypass', 'Auth Skip'],
-        hydrogen: ['Token Gen', 'License Extract'],
-        codex: ['Key Generator', 'Auth Bypass'],
-        default: ['Direct Access', 'API Extract', 'Token Bypass']
-    };
-
-    const serviceMethod = methods[service.key] || methods.default;
-    const selectedMethod = serviceMethod[Math.floor(Math.random() * serviceMethod.length)];
-    
-    let extraInfo = null;
-    if (service.key === 'platoboost') {
-        extraInfo = extractPlatoData(url);
+    try {
+        const apiResult = await tryBypassAPIs(url);
+        if (apiResult.success) {
+            return {
+                success: true,
+                key: apiResult.result,
+                method: `API Bypass (${apiResult.api})`,
+                time: Date.now() - start
+            };
+        }
+        
+        return {
+            success: false,
+            error: 'Bypass API tidak tersedia',
+            time: Date.now() - start
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message,
+            time: Date.now() - start
+        };
     }
+}
 
-    // Generate proper key
-    const key = generateKey(service.key, url);
+async function bypassGeneric(url, service) {
+    const start = Date.now();
     
-    return {
-        success: true,
-        key: key,
-        method: selectedMethod,
-        time: Date.now() - start,
-        extraInfo
-    };
+    try {
+        const apiResult = await tryBypassAPIs(url);
+        if (apiResult.success) {
+            return {
+                success: true,
+                key: apiResult.result,
+                method: `API Bypass (${apiResult.api})`,
+                time: Date.now() - start
+            };
+        }
+        
+        return {
+            success: false,
+            error: 'Tidak dapat bypass link ini',
+            time: Date.now() - start
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message,
+            time: Date.now() - start
+        };
+    }
+}
+
+// Main bypass router
+async function bypass(url, service) {
+    console.log(`[Bypass] Starting bypass for ${service.name}: ${url.substring(0, 50)}...`);
+    
+    switch (service.key) {
+        case 'platoboost':
+            return await bypassPlatoboost(url);
+        case 'linkvertise':
+            return await bypassLinkvertise(url);
+        default:
+            return await bypassGeneric(url, service);
+    }
 }
 
 // Slash commands
 const commands = [
     { 
         name: 'bypass', 
-        description: 'Bypass any supported link', 
+        description: 'Bypass any supported link (REAL)', 
         options: [{ name: 'url', type: 3, description: 'URL to bypass', required: true }] 
     },
     { name: 'services', description: 'List all supported services' },
     { name: 'stats', description: 'View bot statistics' },
-    { name: 'ping', description: 'Check bot latency' },
-    { 
-        name: 'check', 
-        description: 'Check if URL is supported', 
-        options: [{ name: 'url', type: 3, description: 'URL to check', required: true }] 
-    }
+    { name: 'ping', description: 'Check bot latency' }
 ];
 
-// Ready event
+// Ready
 client.once('ready', async () => {
     console.log(`\n✅ ${client.user.tag} is online!`);
     console.log(`📊 Servers: ${client.guilds.cache.size}`);
-    console.log(`🔓 Services: ${Object.keys(SERVICES).length}\n`);
+    console.log(`🔓 Services: ${Object.keys(SERVICES).length}`);
+    console.log(`⚡ Mode: REAL BYPASS\n`);
 
-    client.user.setActivity(`/bypass | ${Object.keys(SERVICES).length} services`, { type: 3 });
+    client.user.setActivity(`/bypass | Real Bypass`, { type: 3 });
 
     const rest = new REST({ version: '10' }).setToken(TOKEN);
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('✅ Commands registered!');
+    console.log('✅ Commands registered!\n');
 });
 
-// Interaction handler
+// Interactions
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     
@@ -292,98 +405,68 @@ client.on('interactionCreate', async interaction => {
     const { commandName } = interaction;
 
     try {
-        // PING
         if (commandName === 'ping') {
             const sent = await interaction.reply({ content: '🏓 Pinging...', fetchReply: true });
-            await interaction.editReply(`🏓 **Pong!** Latency: \`${sent.createdTimestamp - interaction.createdTimestamp}ms\` | API: \`${client.ws.ping}ms\``);
+            await interaction.editReply(`🏓 **Pong!** \`${sent.createdTimestamp - interaction.createdTimestamp}ms\` | API: \`${client.ws.ping}ms\``);
         }
 
-        // SERVICES
         else if (commandName === 'services') {
             const list = Object.values(SERVICES).map(s => `${s.emoji} **${s.name}**`).join('\n');
             const embed = new EmbedBuilder()
                 .setColor('#00ff00')
-                .setTitle('🔓 Supported Services')
+                .setTitle('🔓 Supported Services (Real Bypass)')
                 .setDescription(list)
-                .addFields({
-                    name: '📝 Example',
-                    value: '```\n/bypass url:https://auth.platorelay.com/a?d=xxx\n```'
-                })
-                .setFooter({ text: `Total: ${Object.keys(SERVICES).length} services` })
+                .addFields({ name: '⚡ Mode', value: '```Real Bypass - Mendapatkan key/link asli```' })
+                .setFooter({ text: `${Object.keys(SERVICES).length} services` })
                 .setTimestamp();
             await interaction.reply({ embeds: [embed] });
         }
 
-        // STATS
         else if (commandName === 'stats') {
             const uptime = Math.floor((Date.now() - stats.start) / 1000);
             const h = Math.floor(uptime / 3600);
             const m = Math.floor((uptime % 3600) / 60);
-            const s = uptime % 60;
-            const successRate = stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(1) : 0;
+            const rate = stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(1) : 0;
             
             const embed = new EmbedBuilder()
                 .setColor('#00ff00')
-                .setTitle('📊 Bot Statistics')
+                .setTitle('📊 Statistics')
                 .addFields(
-                    { name: '🔢 Total', value: `\`${stats.total}\``, inline: true },
-                    { name: '✅ Success', value: `\`${stats.success}\``, inline: true },
-                    { name: '❌ Failed', value: `\`${stats.failed}\``, inline: true },
-                    { name: '📈 Rate', value: `\`${successRate}%\``, inline: true },
-                    { name: '👥 Users', value: `\`${stats.users.size}\``, inline: true },
-                    { name: '🖥️ Servers', value: `\`${client.guilds.cache.size}\``, inline: true },
-                    { name: '⏰ Uptime', value: `\`${h}h ${m}m ${s}s\``, inline: true },
-                    { name: '🏓 Ping', value: `\`${client.ws.ping}ms\``, inline: true }
+                    { name: 'Total', value: `\`${stats.total}\``, inline: true },
+                    { name: 'Success', value: `\`${stats.success}\``, inline: true },
+                    { name: 'Failed', value: `\`${stats.failed}\``, inline: true },
+                    { name: 'Rate', value: `\`${rate}%\``, inline: true },
+                    { name: 'Users', value: `\`${stats.users.size}\``, inline: true },
+                    { name: 'Uptime', value: `\`${h}h ${m}m\``, inline: true }
                 )
                 .setTimestamp();
             await interaction.reply({ embeds: [embed] });
         }
 
-        // CHECK
-        else if (commandName === 'check') {
-            const url = interaction.options.getString('url');
-            const service = detectService(url);
-
-            if (service) {
-                const embed = new EmbedBuilder()
-                    .setColor('#00ff00')
-                    .setTitle(`${service.emoji} Link Detected!`)
-                    .setDescription(`**Service:** ${service.name}`)
-                    .addFields({ name: '✅ Status', value: 'Link dapat di-bypass!' })
-                    .setTimestamp();
-                await interaction.reply({ embeds: [embed] });
-            } else {
-                await interaction.reply({ 
-                    content: `❌ **URL tidak didukung!**\n\nGunakan \`/services\` untuk melihat list.`, 
-                    ephemeral: true 
-                });
-            }
-        }
-
-        // BYPASS
         else if (commandName === 'bypass') {
             const url = interaction.options.getString('url');
             const service = detectService(url);
 
             if (!service) {
                 return interaction.reply({ 
-                    content: `❌ **URL tidak didukung!**\n\n💡 Gunakan \`/services\` untuk melihat daftar.`, 
+                    content: `❌ **URL tidak didukung!**\nGunakan \`/services\` untuk melihat list.`, 
                     ephemeral: true 
                 });
             }
 
             await interaction.deferReply();
 
-            // Loading embed
+            // Loading
             const loadingEmbed = new EmbedBuilder()
                 .setColor('#ffaa00')
                 .setTitle(`${service.emoji} Bypassing ${service.name}...`)
-                .setDescription('```⏳ Processing bypass...\n\n[██████████░░░░░░░░░░] 50%```')
+                .setDescription('```⏳ Menghubungi bypass server...\n\n[████████░░░░░░░░░░░░] 40%```')
+                .setFooter({ text: 'Real Bypass - Mohon tunggu...' })
                 .setTimestamp();
             
             await interaction.editReply({ embeds: [loadingEmbed] });
 
-            // Process
+            // Process real bypass
             stats.total++;
             const result = await bypass(url, service);
 
@@ -392,36 +475,57 @@ client.on('interactionCreate', async interaction => {
 
                 const embed = new EmbedBuilder()
                     .setColor('#00ff00')
-                    .setTitle(`✅ ${service.emoji} ${service.name} - Success!`)
+                    .setTitle(`✅ ${service.emoji} ${service.name} - Bypassed!`)
                     .addFields(
-                        { name: '🔑 Key', value: `\`\`\`${result.key}\`\`\``, inline: false },
+                        { name: '🔑 Result', value: `\`\`\`${result.key}\`\`\``, inline: false },
                         { name: '⚡ Method', value: `\`${result.method}\``, inline: true },
                         { name: '⏱️ Time', value: `\`${result.time}ms\``, inline: true }
                     )
-                    .setTimestamp()
-                    .setFooter({ text: `Requested by ${interaction.user.tag}` });
+                    .setFooter({ text: `Real Bypass | ${interaction.user.tag}` })
+                    .setTimestamp();
 
-                if (result.extraInfo) {
-                    embed.addFields({
-                        name: '📊 Info',
-                        value: `Host: \`${result.extraInfo.host}\``,
-                        inline: false
-                    });
+                // If result is a URL, add visit button
+                const isUrl = result.key.startsWith('http');
+                
+                const row = new ActionRowBuilder();
+                
+                if (isUrl) {
+                    row.addComponents(
+                        new ButtonBuilder()
+                            .setLabel('🔗 Open Link')
+                            .setStyle(ButtonStyle.Link)
+                            .setURL(result.key)
+                    );
                 }
-
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('copy').setLabel('📋 Copy').setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId('new').setLabel('🔄 New').setStyle(ButtonStyle.Primary)
+                
+                row.addComponents(
+                    new ButtonBuilder().setCustomId('copy').setLabel('📋 Copy').setStyle(ButtonStyle.Secondary)
                 );
 
                 await interaction.editReply({ embeds: [embed], components: [row] });
+
             } else {
                 stats.failed++;
-                await interaction.editReply({ content: `❌ Bypass failed!` });
+                
+                const embed = new EmbedBuilder()
+                    .setColor('#ff0000')
+                    .setTitle(`❌ ${service.emoji} Bypass Failed`)
+                    .addFields(
+                        { name: '❗ Error', value: `\`\`\`${result.error}\`\`\``, inline: false },
+                        { name: '⏱️ Time', value: `\`${result.time}ms\``, inline: true }
+                    )
+                    .addFields({
+                        name: '💡 Kemungkinan Penyebab',
+                        value: '• Link sudah expired\n• Service sedang down\n• Link memerlukan verifikasi manual\n• Rate limit dari API',
+                        inline: false
+                    })
+                    .setTimestamp();
+
+                await interaction.editReply({ embeds: [embed] });
             }
         }
     } catch (error) {
-        console.error(error);
+        console.error('Error:', error);
         const reply = { content: `❌ Error: ${error.message}`, ephemeral: true };
         if (interaction.replied || interaction.deferred) {
             interaction.followUp(reply);
@@ -434,17 +538,19 @@ client.on('interactionCreate', async interaction => {
 // Button handler
 client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
-    
     if (interaction.customId === 'copy') {
-        await interaction.reply({ content: '📋 Copy key dari kotak di atas!', ephemeral: true });
-    } else if (interaction.customId === 'new') {
-        await interaction.reply({ content: '🔄 Gunakan `/bypass <url>`!', ephemeral: true });
+        await interaction.reply({ content: '📋 Copy hasil dari kotak di atas!', ephemeral: true });
     }
 });
 
 // Express
 const app = express();
-app.get('/', (_, res) => res.json({ status: 'online', bot: client.user?.tag }));
+app.get('/', (_, res) => res.json({ 
+    status: 'online', 
+    mode: 'real_bypass',
+    bot: client.user?.tag,
+    stats: { total: stats.total, success: stats.success }
+}));
 app.get('/health', (_, res) => res.send('OK'));
 app.listen(PORT, () => console.log(`🌐 Port ${PORT}`));
 
