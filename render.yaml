@@ -1,13 +1,10 @@
 services:
   - type: web
-    name: universal-bypass-bot
-    env: node
+    name: bypass-bot
+    runtime: node
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node index.js
     envVars:
       - key: DISCORD_TOKEN
         sync: false
-      - key: NODE_ENV
-        value: production
     healthCheckPath: /health
-    autoDeploy: true
