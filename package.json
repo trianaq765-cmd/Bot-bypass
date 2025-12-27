@@ -1,23 +1,15 @@
 {
-  "name": "universal-bypass-bot",
+  "name": "bypass-bot",
   "version": "3.0.0",
-  "description": "Multi-service bypass Discord Bot",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1",
-    "axios": "^1.6.2",
-    "express": "^4.18.2",
-    "cheerio": "^1.0.0-rc.12",
-    "node-fetch": "^2.7.0",
-    "tough-cookie": "^4.1.3",
-    "puppeteer": "^21.6.1"
+    "express": "^4.18.2"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "20.x"
   }
 }
